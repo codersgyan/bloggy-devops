@@ -1,0 +1,24 @@
+global:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+
+scrape_configs:
+    - job_name: 'docker-daemon'
+      metrics_path: /metrics
+      static_configs:
+          - targets:
+                - '5.161.65.121:9323'
+    - job_name: 'cadvisor'
+      dns_sd_configs:
+          - names: ['tasks.cadvisor']
+            type: 'A'
+            port: 8080
+      scrape_interval: 30s
+      metrics_path: '/metrics'
+      relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: cadvisor:8080

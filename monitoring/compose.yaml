@@ -1,0 +1,105 @@
+services:
+    prometheus:
+        image: prom/prometheus:latest
+        volumes:
+            - ./prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+            - prometheus-data:/prometheus
+        command:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+        ports:
+            - '9090:9090'
+        deploy:
+            replicas: 1
+            placement:
+                constraints:
+                    - node.role == manager
+            resources:
+                limits:
+                    memory: 1G
+                reservations:
+                    memory: 512M
+        networks:
+            - monitoring
+            - bloggy_blog-app-net
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'wget',
+                    '--no-verbose',
+                    '--tries=1',
+                    '--spider',
+                    'http://localhost:9090/-/healthy',
+                ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+    cadvisor:
+        image: gcr.io/cadvisor/cadvisor:v0.47.0
+        volumes:
+            - /:/rootfs:ro
+            - /var/run:/var/run:ro
+            - /sys:/sys:ro
+            - /var/lib/docker/:/var/lib/docker:ro
+            - /dev/disk/:/dev/disk:ro
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+        ports:
+            - '8080:8080'
+        deploy:
+            mode: global
+            resources:
+                limits:
+                    memory: 256M
+                reservations:
+                    memory: 128M
+        networks:
+            - monitoring
+        command:
+            - '--housekeeping_interval=30s'
+            - '--store_container_labels=false'
+
+    grafana:
+        image: grafana/grafana:10.1.0
+        ports:
+            - '3000:3000'
+        volumes:
+            - grafana-storage:/var/lib/grafana
+        environment:
+            - GF_SECURITY_ADMIN_PASSWORD__FILE=/run/secrets/grafana_password
+        secrets:
+            - grafana_password
+        deploy:
+            replicas: 1
+            placement:
+                constraints:
+                    - node.role == manager
+            resources:
+                limits:
+                    memory: 512M
+                reservations:
+                    memory: 256M
+        networks:
+            - monitoring
+            - bloggy_blog-app-net
+        healthcheck:
+            test: ['CMD-SHELL', 'curl -f http://localhost:3000/api/health || exit 1']
+            interval: 30s
+            timeout: 10s
+            retries: 3
+
+volumes:
+    grafana-storage:
+        driver: local
+    prometheus-data:
+        driver: local
+
+networks:
+    monitoring:
+        driver: overlay
+        attachable: true
+    bloggy_blog-app-net:
+        external: true
+
+secrets:
+    grafana_password:
+        external: true
